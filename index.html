@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>材料配方优化 - SOBO</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>材料配方优化</span>
+        </div>
+        <nav class="nav-list" aria-label="主导航">
+          <button class="nav-item active" type="button"><span class="icon">▥</span>项目</button>
+          <button class="nav-item" type="button"><span class="icon">△</span>实验数据</button>
+          <button class="nav-item" type="button"><span class="icon">◎</span>推荐候选</button>
+          <button class="nav-item" type="button"><span class="icon">⚖</span>变量约束</button>
+          <button class="nav-item" type="button"><span class="icon">⇧</span>导入导出</button>
+          <button class="nav-item" type="button"><span class="icon">⚙</span>设置</button>
+        </nav>
+        <button class="collapse" type="button">← 收起</button>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="project-title">
+            <h1>环氧树脂耐热性优化</h1>
+            <button class="icon-button" type="button" title="编辑项目">✎</button>
+          </div>
+          <dl class="meta-grid">
+            <div>
+              <dt>目标（单目标）</dt>
+              <dd>玻璃化转变温度 Tg</dd>
+            </div>
+            <div>
+              <dt>优化方向</dt>
+              <dd class="positive">最大化</dd>
+            </div>
+            <div>
+              <dt>项目状态</dt>
+              <dd><span class="dot"></span>优化中</dd>
+            </div>
+            <div>
+              <dt>创建时间</dt>
+              <dd>2025-05-12 10:30</dd>
+            </div>
+            <div>
+              <dt>最后更新</dt>
+              <dd id="lastUpdated">2025-05-16 14:22</dd>
+            </div>
+          </dl>
+          <button class="settings-button" type="button">⚙ 项目设置⌄</button>
+        </header>
+
+        <section class="summary-grid" aria-label="项目概览">
+          <article class="metric-card">
+            <span class="metric-label">已实验配方</span>
+            <strong id="experimentCount">0</strong>
+            <small>有效 <b id="validCount">0</b>　异常 <b class="danger" id="invalidCount">0</b></small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">当前最优 Tg</span>
+            <strong><span id="bestValue">--</span> <em>℃</em></strong>
+            <small id="bestSource">来源：--</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">预测最优 Tg</span>
+            <strong><span id="predictedBest">--</span> <em>℃</em></strong>
+            <small id="candidateSource">候选 #--</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">预计改进</span>
+            <strong class="positive">+<span id="expectedGain">0.0</span> <em>℃</em></strong>
+            <small>相对当前最优</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">下一实验轮次</span>
+            <strong>第 <span id="nextRound">8</span> <em>轮</em></strong>
+            <small>建议 <span id="suggestionCount">12</span> 个候选</small>
+          </article>
+          <article class="metric-card validation-card">
+            <span class="metric-label">数据校验状态</span>
+            <strong class="danger">△ 数据校验：<span id="validationIssueCount">0</span> 条需修正</strong>
+            <button class="link-button" type="button" id="showValidation">查看详情 ›</button>
+          </article>
+        </section>
+
+        <section class="analytics-grid">
+          <article class="panel chart-panel">
+            <div class="panel-heading">
+              <h2>历史最优 Tg 趋势</h2>
+              <span>单位：℃</span>
+            </div>
+            <canvas id="trendChart" width="720" height="320" aria-label="历史最优 Tg 趋势图"></canvas>
+          </article>
+          <article class="panel chart-panel">
+            <div class="panel-heading">
+              <h2>目标值（Tg）分布</h2>
+              <span>已实验 / 候选预测</span>
+            </div>
+            <canvas id="distributionChart" width="560" height="320" aria-label="目标值分布图"></canvas>
+          </article>
+          <article class="panel best-panel">
+            <div class="panel-heading">
+              <h2>当前最优配方（实验值）</h2>
+              <span class="status-pill done">已实验</span>
+            </div>
+            <div class="best-value"><span id="bestCardValue">--</span> ℃ <small id="bestCardMeta">实验 ID：--</small></div>
+            <div class="stacked-bar" id="bestBar"></div>
+            <ul class="component-list" id="bestComponents"></ul>
+            <p>实验备注：高温后 Tg 表现优异。</p>
+            <button class="secondary-button" type="button">查看详情</button>
+          </article>
+        </section>
+
+        <section class="tables-grid">
+          <article class="panel data-panel">
+            <div class="table-toolbar">
+              <div>
+                <button class="secondary-button" type="button" id="importButton">⇧ 导入历史实验</button>
+                <label class="secondary-button file-label">
+                  选择 CSV
+                  <input id="csvInput" type="file" accept=".csv,text/csv" />
+                </label>
+                <button class="danger-button" type="button" id="showValidationInline">△ 数据校验：<span id="toolbarIssueCount">0</span> 条需修正</button>
+              </div>
+              <button class="icon-button" type="button" title="展开">›</button>
+            </div>
+            <div class="panel-heading">
+              <h2>实验数据 <small>（共 <span id="experimentTotal">0</span> 条）</small></h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>实验 ID</th>
+                    <th>轮次</th>
+                    <th>环氧树脂 %</th>
+                    <th>固化剂 %</th>
+                    <th>增韧剂 %</th>
+                    <th>填料 %</th>
+                    <th>稀释剂 %</th>
+                    <th>Tg (℃)</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="experimentRows"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel recommendation-panel">
+            <div class="table-toolbar">
+              <button class="primary-button" type="button" id="generateButton">✦ 生成 12 个候选</button>
+              <button class="secondary-button" type="button" id="exportButton">⇩ 导出 CSV</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>候选 ID</th>
+                    <th>环氧树脂 %</th>
+                    <th>固化剂 %</th>
+                    <th>增韧剂 %</th>
+                    <th>填料 %</th>
+                    <th>稀释剂 %</th>
+                    <th>比例总和</th>
+                    <th>预测 Tg (℃)</th>
+                    <th>不确定性 (℃)</th>
+                    <th>预期改进 (℃)</th>
+                    <th>推荐理由</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="candidateRows"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="validationDialog">
+      <div class="dialog-card">
+        <div class="dialog-heading">
+          <h2>数据校验详情</h2>
+          <button class="icon-button" type="button" id="closeValidation">×</button>
+        </div>
+        <ul id="validationList" class="validation-list"></ul>
+      </div>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
