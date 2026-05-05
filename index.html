@@ -3,14 +3,143 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SOBO</title>
+    <title>MatOpt 配方优化</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="empty-state">
-      <h1>SOBO</h1>
-      <p>当前界面已清空，等待重新设计。</p>
+    <header class="topbar">
+      <div class="brand"><strong>MatOpt</strong><span>配方优化</span></div>
+      <div class="project-meta">
+        <span>目标</span><strong>最大化 Tg</strong><span>·</span><span>迭代</span><strong><span id="iterationNow">18</span> / 40</strong>
+      </div>
+      <div class="top-actions">
+        <button class="secondary-button" id="newExperimentButton" type="button">＋ 新建实验</button>
+        <button class="primary-button" id="generateButton" type="button">生成推荐</button>
+        <button class="secondary-button" id="exportButton" type="button">⇩ 导出</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="panel history-panel">
+        <div class="section-head">
+          <div>
+            <h2>1. 历史数据</h2>
+            <span>用已有实验结果训练模型</span>
+          </div>
+          <div class="head-actions">
+            <button class="secondary-button" id="manualInputButton" type="button">⌨ 手动输入</button>
+            <label class="secondary-button file-button">
+              ⇧ 上传 CSV
+              <input id="csvInput" type="file" accept=".csv,text/csv" />
+            </label>
+            <button class="secondary-button" id="mappingButton" type="button">☷ 字段映射</button>
+          </div>
+        </div>
+
+        <div class="status-row">
+          <span class="status-badge info">已导入 <b id="importedCount">128</b> 条</span>
+          <span class="status-badge success">可用于建模 <b id="validCount">121</b> 条</span>
+          <button class="status-badge warning" id="showIssuesButton" type="button">需修正 <b id="issueCount">7</b> 条</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>编号</th>
+                <th>样品ID</th>
+                <th>环氧树脂 %</th>
+                <th>固化剂 %</th>
+                <th>增韧剂 %</th>
+                <th>填料 %</th>
+                <th>稀释剂 %</th>
+                <th>Tg 实测值 (℃)</th>
+                <th>校验</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody id="historyRows"></tbody>
+          </table>
+        </div>
+
+        <div class="panel-footer">
+          <button class="secondary-button" id="addRowButton" type="button">＋ 添加一行</button>
+          <div>
+            <button class="secondary-button" id="validateButton" type="button">校验数据</button>
+            <button class="primary-button" id="trainButton" type="button">用历史数据训练</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel settings-panel">
+        <h2>2. 优化设置 <small>（概要）</small></h2>
+        <div class="settings-box">
+          <dl>
+            <div><dt>目标指标</dt><dd>Tg (℃)</dd></div>
+            <div><dt>优化方向</dt><dd>最大化</dd></div>
+            <div><dt>推荐数量</dt><dd><input id="recommendCount" type="number" min="1" max="20" value="3" /></dd></div>
+          </dl>
+          <dl>
+            <div><dt>变量</dt><dd>5 个：环氧树脂、固化剂、增韧剂、填料、稀释剂</dd></div>
+            <div><dt>约束</dt><dd>比例总和 100%，填料 ≤ 15%</dd></div>
+          </dl>
+          <button class="secondary-button outline-teal" id="editVariablesButton" type="button">编辑变量与约束</button>
+        </div>
+      </section>
+
+      <section class="panel recommendation-panel">
+        <h2>3. 推荐配方 <small>（下一组实验建议）</small></h2>
+        <div class="recommend-grid" id="recommendationCards"></div>
+      </section>
+
+      <section class="panel feedback-panel">
+        <h2>4. 实验回填 <small>（当前迭代实验结果）</small></h2>
+        <div class="table-wrap">
+          <table class="feedback-table">
+            <thead>
+              <tr>
+                <th>迭代</th>
+                <th>样品ID</th>
+                <th>配方</th>
+                <th>预测 Tg (℃)</th>
+                <th>实测 Tg (℃)</th>
+                <th>状态</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody id="feedbackRows"></tbody>
+          </table>
+        </div>
+        <div class="footer-right">
+          <button class="primary-button" id="nextRoundButton" type="button">更新模型并生成下一轮</button>
+        </div>
+      </section>
     </main>
+
+    <dialog id="issuesDialog">
+      <div class="dialog-card">
+        <div class="dialog-head">
+          <h3>数据校验结果</h3>
+          <button class="icon-button" id="closeIssuesButton" type="button">×</button>
+        </div>
+        <ul id="issuesList"></ul>
+      </div>
+    </dialog>
+
+    <dialog id="variableDialog">
+      <div class="dialog-card wide">
+        <div class="dialog-head">
+          <h3>变量与约束</h3>
+          <button class="icon-button" id="closeVariableButton" type="button">×</button>
+        </div>
+        <div id="variableRows" class="variable-grid"></div>
+        <div class="dialog-actions">
+          <button class="primary-button" id="saveVariablesButton" type="button">保存设置</button>
+        </div>
+      </div>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
   </body>
 </html>
