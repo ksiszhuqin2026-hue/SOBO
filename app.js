@@ -12,9 +12,7 @@ let optimization = {
   objectiveName: "Tg",
   objectiveUnit: "℃",
   direction: "max",
-  acquisition: "ei",
-  exploration: 0.35,
-  exploitation: 0.65
+  acquisition: "ei"
 };
 
 let experiments = [
@@ -47,6 +45,12 @@ function rowTotal(row) {
   return components.reduce((sum, component) => sum + Number(row[component.key] || 0), 0);
 }
 
+function acquisitionWeights() {
+  if (optimization.acquisition === "ucb") return { exploration: 0.75, exploitation: 0.45 };
+  if (optimization.acquisition === "pi") return { exploration: 0.25, exploitation: 0.85 };
+  return { exploration: 0.45, exploitation: 0.65 };
+}
+
 function objectiveLabel(prefix = "") {
   return `${prefix}${optimization.objectiveName} (${optimization.objectiveUnit})`;
 }
@@ -64,13 +68,14 @@ function getBestObjectiveValue() {
 function scoreCandidate(predicted, uncertainty) {
   const best = getBestObjectiveValue();
   const exploitationGain = optimization.direction === "min" ? best - predicted : predicted - best;
+  const weights = acquisitionWeights();
   if (optimization.acquisition === "ucb") {
-    return exploitationGain * optimization.exploitation + uncertainty * optimization.exploration * 1.6;
+    return exploitationGain * weights.exploitation + uncertainty * weights.exploration * 1.6;
   }
   if (optimization.acquisition === "pi") {
-    return exploitationGain > 0 ? optimization.exploitation + optimization.exploration * uncertainty * 0.08 : optimization.exploration * uncertainty * 0.03;
+    return exploitationGain > 0 ? weights.exploitation + weights.exploration * uncertainty * 0.08 : weights.exploration * uncertainty * 0.03;
   }
-  return exploitationGain * optimization.exploitation + Math.max(0, uncertainty) * optimization.exploration;
+  return exploitationGain * weights.exploitation + Math.max(0, uncertainty) * weights.exploration;
 }
 
 function renderSettings() {
@@ -79,19 +84,16 @@ function renderSettings() {
   $("#objectiveUnit").value = optimization.objectiveUnit;
   $("#objectiveDirection").value = optimization.direction;
   $("#acquisitionFunction").value = optimization.acquisition;
-  $("#explorationInput").value = optimization.exploration;
-  $("#exploitationInput").value = optimization.exploitation;
-  $("#explorationValue").textContent = Number(optimization.exploration).toFixed(2);
-  $("#exploitationValue").textContent = Number(optimization.exploitation).toFixed(2);
   $("#variableSummary").textContent = `${components.length} 个：${components.map((component) => component.name).join("、")}`;
   $("#constraintSummary").textContent = `比例总和 100%，${components.find((component) => component.key === "filler")?.name || "填料"} ≤ ${components.find((component) => component.key === "filler")?.max ?? 15}%`;
-  $("#objectiveValueHead").textContent = objectiveLabel("实测 ");
   $("#feedbackPredictedHead").textContent = objectiveLabel("预测 ");
   $("#feedbackMeasuredHead").textContent = objectiveLabel("实测 ");
-  components.forEach((component) => {
-    const head = document.querySelector(`[data-component-head="${component.key}"]`);
-    if (head) head.textContent = `${component.name} %`;
-  });
+  $("#strategyHint").textContent = strategyHint();
+}
+
+function strategyHint() {
+  const current = optimization.acquisition === "ucb" ? "当前偏前期探索" : optimization.acquisition === "pi" ? "当前偏后期稳健利用" : "当前适合中期平衡探索与利用";
+  return `前期用 UCB，中期用 EI，后期用 PI。${current}。`;
 }
 
 function validateRow(row) {
@@ -104,6 +106,16 @@ function validateRow(row) {
 }
 
 function renderHistory() {
+  $("#historyHead").innerHTML = `
+    <tr>
+      <th>编号</th>
+      <th>样品ID</th>
+      ${components.map((component) => `<th>${component.name} %</th>`).join("")}
+      <th>${objectiveLabel("实测 ")}</th>
+      <th>校验</th>
+      <th>备注</th>
+    </tr>
+  `;
   $("#historyRows").innerHTML = experiments.map((row) => {
     const validation = validateRow(row);
     return `
@@ -140,7 +152,6 @@ function renderRecommendations() {
       <p class="formula-line">${formulaText(rec)}</p>
       <div class="card-actions">
         <button class="primary-button" type="button" data-apply="${rec.id}">应用为待实验</button>
-        <button class="secondary-button" type="button" data-detail="${rec.id}">查看详情</button>
       </div>
     </article>
   `).join("");
@@ -167,6 +178,7 @@ function renderVariables() {
       <label>下限 <input data-var="${component.key}" data-kind="min" value="${component.min}" /></label>
       <label>上限 <input data-var="${component.key}" data-kind="max" value="${component.max}" /></label>
       <label>单位 <input value="%" disabled /></label>
+      <button class="secondary-button" type="button" data-delete-var="${component.key}">删除</button>
     </div>
   `).join("");
 }
@@ -198,23 +210,40 @@ function addRow() {
 function generateRecommendations() {
   const best = getBestObjectiveValue();
   const count = Math.max(1, Math.min(20, Number($("#recommendCount").value || 3)));
+  const weights = acquisitionWeights();
   const raw = Array.from({ length: count }, (_, index) => {
-    const epoxy = 49 + ((index * 2) % 5);
-    const curing = 29 + (index % 3);
-    const toughener = 7;
-    const filler = 11 - (index % 2);
-    const diluent = 100 - epoxy - curing - toughener - filler;
-    const uncertainty = 1.4 + optimization.exploration * 2 + index * 0.18;
-    const exploitationStep = optimization.exploitation * (3.6 - index * 0.85);
-    const explorationStep = optimization.exploration * (index % 2 === 0 ? 0.8 : 1.4);
+    const values = buildFormula(index);
+    const uncertainty = 1.4 + weights.exploration * 2 + index * 0.18;
+    const exploitationStep = weights.exploitation * (3.6 - index * 0.85);
+    const explorationStep = weights.exploration * (index % 2 === 0 ? 0.8 : 1.4);
     const delta = Math.max(0.2, exploitationStep + explorationStep + Math.random() * 0.35);
     const predicted = optimization.direction === "min" ? best - delta : best + delta;
     const improvement = optimization.direction === "min" ? best - predicted : predicted - best;
-    return { id: index + 1, epoxy, curing, toughener, filler, diluent, predicted, uncertainty, improvement, score: scoreCandidate(predicted, uncertainty) };
+    return { id: index + 1, ...values, predicted, uncertainty, improvement, score: scoreCandidate(predicted, uncertainty) };
   });
   recommendations = raw.sort((a, b) => b.score - a.score).map((item, index) => ({ ...item, id: index + 1 }));
   renderRecommendations();
   showToast(`已按${directionText()}与${$("#acquisitionFunction").selectedOptions[0].textContent}生成 ${count} 个推荐配方。`);
+}
+
+function buildFormula(seed) {
+  const values = {};
+  let remaining = 100;
+  components.forEach((component, index) => {
+    if (index === components.length - 1) {
+      values[component.key] = Math.max(component.min, Math.min(component.max, Math.round(remaining * 10) / 10));
+      return;
+    }
+    const span = Math.max(0, component.max - component.min);
+    const wave = ((seed * 17 + index * 23) % 100) / 100;
+    const value = Math.round((component.min + span * (0.35 + wave * 0.3)) * 10) / 10;
+    values[component.key] = Math.max(component.min, Math.min(component.max, value));
+    remaining -= values[component.key];
+  });
+  const total = Object.values(values).reduce((sum, value) => sum + value, 0);
+  const adjustable = components.find((component) => values[component.key] + (100 - total) >= component.min && values[component.key] + (100 - total) <= component.max) || components[0];
+  values[adjustable.key] = Math.round((values[adjustable.key] + (100 - total)) * 10) / 10;
+  return values;
 }
 
 function applyRecommendation(id) {
@@ -304,9 +333,7 @@ function bindEvents() {
   });
   $("#recommendationCards").addEventListener("click", (event) => {
     const apply = event.target.closest("[data-apply]");
-    const detail = event.target.closest("[data-detail]");
     if (apply) applyRecommendation(apply.dataset.apply);
-    if (detail) showToast(formulaText(recommendations.find((item) => item.id === Number(detail.dataset.detail))));
   });
   $("#addRowButton").addEventListener("click", addRow);
   $("#newExperimentButton").addEventListener("click", addRow);
@@ -323,12 +350,6 @@ function bindEvents() {
     saveOptimizationSettings(true);
     generateRecommendations();
   });
-  $("#explorationInput").addEventListener("input", () => {
-    $("#explorationValue").textContent = Number($("#explorationInput").value).toFixed(2);
-  });
-  $("#exploitationInput").addEventListener("input", () => {
-    $("#exploitationValue").textContent = Number($("#exploitationInput").value).toFixed(2);
-  });
   $("#nextRoundButton").addEventListener("click", updateModel);
   $("#exportButton").addEventListener("click", exportCsv);
   $("#manualInputButton").addEventListener("click", addRow);
@@ -337,7 +358,35 @@ function bindEvents() {
     renderVariables();
     $("#variableDialog").showModal();
   });
+  $("#variableRows").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-var]");
+    if (!button) return;
+    if (components.length <= 1) {
+      showToast("至少保留 1 个变量。");
+      return;
+    }
+    const key = button.dataset.deleteVar;
+    const index = components.findIndex((component) => component.key === key);
+    components.splice(index, 1);
+    experiments.forEach((row) => delete row[key]);
+    recommendations.forEach((row) => delete row[key]);
+    feedback.forEach((row) => row.formula && delete row.formula[key]);
+    renderVariables();
+    showToast("变量已删除，保存后生效。");
+  });
   $("#closeVariableButton").addEventListener("click", () => $("#variableDialog").close());
+  $("#addVariableButton").addEventListener("click", () => {
+    const next = components.length + 1;
+    const key = `var${Date.now()}`;
+    components.push({ key, name: `变量${next}`, min: 0, max: 20 });
+    experiments.forEach((row) => row[key] = 0);
+    recommendations.forEach((row) => row[key] = 0);
+    feedback.forEach((row) => {
+      if (row.formula) row.formula[key] = 0;
+    });
+    renderVariables();
+    showToast("已添加变量，请设置名称和上下限。");
+  });
   $("#saveVariablesButton").addEventListener("click", () => {
     $$("#variableRows [data-var]").forEach((input) => {
       const component = components.find((item) => item.key === input.dataset.var);
@@ -363,8 +412,6 @@ function saveOptimizationSettings(showMessage) {
   optimization.objectiveUnit = $("#objectiveUnit").value.trim() || "℃";
   optimization.direction = $("#objectiveDirection").value;
   optimization.acquisition = $("#acquisitionFunction").value;
-  optimization.exploration = Number($("#explorationInput").value);
-  optimization.exploitation = Number($("#exploitationInput").value);
   renderSettings();
   if (showMessage) showToast("优化设置已保存。");
 }

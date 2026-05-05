@@ -44,20 +44,7 @@
 
         <div class="table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>编号</th>
-                <th>样品ID</th>
-                <th data-component-head="epoxy">环氧树脂 %</th>
-                <th data-component-head="curing">固化剂 %</th>
-                <th data-component-head="toughener">增韧剂 %</th>
-                <th data-component-head="filler">填料 %</th>
-                <th data-component-head="diluent">稀释剂 %</th>
-                <th id="objectiveValueHead">Tg 实测值 (℃)</th>
-                <th>校验</th>
-                <th>备注</th>
-              </tr>
-            </thead>
+            <thead id="historyHead"></thead>
             <tbody id="historyRows"></tbody>
           </table>
         </div>
@@ -101,8 +88,10 @@
                 </select>
               </dd>
             </div>
-            <div><dt>探索强度 ξ</dt><dd class="range-cell"><input id="explorationInput" type="range" min="0" max="1" step="0.01" value="0.35" /><b id="explorationValue">0.35</b></dd></div>
-            <div><dt>利用权重</dt><dd class="range-cell"><input id="exploitationInput" type="range" min="0" max="1" step="0.01" value="0.65" /><b id="exploitationValue">0.65</b></dd></div>
+            <div class="strategy-help">
+              <dt>策略建议</dt>
+              <dd id="strategyHint">前期用 UCB，中期用 EI，后期用 PI。</dd>
+            </div>
           </dl>
           <div class="settings-actions">
             <button class="secondary-button outline-teal" id="saveSettingsButton" type="button">保存优化设置</button>
@@ -158,6 +147,7 @@
         </div>
         <div id="variableRows" class="variable-grid"></div>
         <div class="dialog-actions">
+          <button class="secondary-button" id="addVariableButton" type="button">＋ 添加变量</button>
           <button class="primary-button" id="saveVariablesButton" type="button">保存设置</button>
         </div>
       </div>

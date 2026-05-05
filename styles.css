@@ -320,16 +320,9 @@ dd {
   min-height: 28px;
 }
 
-.range-cell {
-  display: grid;
-  grid-template-columns: 1fr 44px;
-  gap: 10px;
-  align-items: center;
-}
-
-.range-cell input {
-  padding: 0;
-  accent-color: var(--teal);
+.strategy-help dd {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .settings-actions {
@@ -388,7 +381,7 @@ dd {
 
 .card-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 32px;
 }
 
@@ -470,7 +463,7 @@ dialog::backdrop {
 
 .variable-row {
   display: grid;
-  grid-template-columns: 1.2fr 120px 120px 120px;
+  grid-template-columns: 1.2fr 120px 120px 120px 80px;
   gap: 10px;
   align-items: center;
 }
