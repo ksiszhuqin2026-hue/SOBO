@@ -30,11 +30,16 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
 button {
+  cursor: pointer;
+}
+
+select {
   cursor: pointer;
 }
 
@@ -241,6 +246,16 @@ td input {
   background: #fff;
 }
 
+.settings-box input,
+.settings-box select {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 8px;
+  background: #fff;
+}
+
 .validation {
   display: inline-flex;
   align-items: center;
@@ -303,8 +318,23 @@ dd {
 #recommendCount {
   width: 74px;
   min-height: 28px;
-  border: 0;
+}
+
+.range-cell {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+  gap: 10px;
+  align-items: center;
+}
+
+.range-cell input {
   padding: 0;
+  accent-color: var(--teal);
+}
+
+.settings-actions {
+  display: grid;
+  gap: 10px;
 }
 
 .recommend-grid {
@@ -440,7 +470,7 @@ dialog::backdrop {
 
 .variable-row {
   display: grid;
-  grid-template-columns: 1fr 120px 120px 120px;
+  grid-template-columns: 1.2fr 120px 120px 120px;
   gap: 10px;
   align-items: center;
 }

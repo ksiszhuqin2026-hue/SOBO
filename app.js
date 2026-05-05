@@ -8,6 +8,15 @@ const components = [
 
 let iteration = 18;
 
+let optimization = {
+  objectiveName: "Tg",
+  objectiveUnit: "℃",
+  direction: "max",
+  acquisition: "ei",
+  exploration: 0.35,
+  exploitation: 0.65
+};
+
 let experiments = [
   { id: 1, sample: "H-001", epoxy: 52, curing: 28, toughener: 8, filler: 10, diluent: 2, tg: 168.5, note: "当前最佳" },
   { id: 2, sample: "H-002", epoxy: 50, curing: 30, toughener: 6, filler: 12, diluent: 2, tg: 165.2, note: "-" },
@@ -36,6 +45,53 @@ function fmt(value, digits = 1) {
 
 function rowTotal(row) {
   return components.reduce((sum, component) => sum + Number(row[component.key] || 0), 0);
+}
+
+function objectiveLabel(prefix = "") {
+  return `${prefix}${optimization.objectiveName} (${optimization.objectiveUnit})`;
+}
+
+function directionText() {
+  return optimization.direction === "min" ? "最小化" : "最大化";
+}
+
+function getBestObjectiveValue() {
+  const values = experiments.map((row) => Number(row.tg)).filter(Number.isFinite);
+  if (!values.length) return 0;
+  return optimization.direction === "min" ? Math.min(...values) : Math.max(...values);
+}
+
+function scoreCandidate(predicted, uncertainty) {
+  const best = getBestObjectiveValue();
+  const exploitationGain = optimization.direction === "min" ? best - predicted : predicted - best;
+  if (optimization.acquisition === "ucb") {
+    return exploitationGain * optimization.exploitation + uncertainty * optimization.exploration * 1.6;
+  }
+  if (optimization.acquisition === "pi") {
+    return exploitationGain > 0 ? optimization.exploitation + optimization.exploration * uncertainty * 0.08 : optimization.exploration * uncertainty * 0.03;
+  }
+  return exploitationGain * optimization.exploitation + Math.max(0, uncertainty) * optimization.exploration;
+}
+
+function renderSettings() {
+  $("#topObjective").textContent = `${directionText()} ${optimization.objectiveName}`;
+  $("#objectiveName").value = optimization.objectiveName;
+  $("#objectiveUnit").value = optimization.objectiveUnit;
+  $("#objectiveDirection").value = optimization.direction;
+  $("#acquisitionFunction").value = optimization.acquisition;
+  $("#explorationInput").value = optimization.exploration;
+  $("#exploitationInput").value = optimization.exploitation;
+  $("#explorationValue").textContent = Number(optimization.exploration).toFixed(2);
+  $("#exploitationValue").textContent = Number(optimization.exploitation).toFixed(2);
+  $("#variableSummary").textContent = `${components.length} 个：${components.map((component) => component.name).join("、")}`;
+  $("#constraintSummary").textContent = `比例总和 100%，${components.find((component) => component.key === "filler")?.name || "填料"} ≤ ${components.find((component) => component.key === "filler")?.max ?? 15}%`;
+  $("#objectiveValueHead").textContent = objectiveLabel("实测 ");
+  $("#feedbackPredictedHead").textContent = objectiveLabel("预测 ");
+  $("#feedbackMeasuredHead").textContent = objectiveLabel("实测 ");
+  components.forEach((component) => {
+    const head = document.querySelector(`[data-component-head="${component.key}"]`);
+    if (head) head.textContent = `${component.name} %`;
+  });
 }
 
 function validateRow(row) {
@@ -77,9 +133,9 @@ function renderRecommendations() {
     <article class="recommend-card">
       <div class="recommend-head">
         <strong class="recommend-title">推荐 ${rec.id}</strong>
-        <span class="recommend-metric"><small>预测 Tg</small><strong class="teal">${fmt(rec.predicted)} °C</strong></span>
-        <span class="recommend-metric"><small>不确定性</small><strong>±${fmt(rec.uncertainty)} °C</strong></span>
-        <span class="recommend-metric"><small>预期提升</small><strong>+${fmt(rec.improvement)} °C</strong></span>
+        <span class="recommend-metric"><small>预测 ${optimization.objectiveName}</small><strong class="teal">${fmt(rec.predicted)} ${optimization.objectiveUnit}</strong></span>
+        <span class="recommend-metric"><small>不确定性</small><strong>±${fmt(rec.uncertainty)} ${optimization.objectiveUnit}</strong></span>
+        <span class="recommend-metric"><small>预期${optimization.direction === "min" ? "降低" : "提升"}</small><strong>${rec.improvement >= 0 ? "+" : ""}${fmt(rec.improvement)} ${optimization.objectiveUnit}</strong></span>
       </div>
       <p class="formula-line">${formulaText(rec)}</p>
       <div class="card-actions">
@@ -107,7 +163,7 @@ function renderFeedback() {
 function renderVariables() {
   $("#variableRows").innerHTML = components.map((component) => `
     <div class="variable-row">
-      <strong>${component.name}</strong>
+      <label>变量名称 <input data-var="${component.key}" data-kind="name" value="${component.name}" /></label>
       <label>下限 <input data-var="${component.key}" data-kind="min" value="${component.min}" /></label>
       <label>上限 <input data-var="${component.key}" data-kind="max" value="${component.max}" /></label>
       <label>单位 <input value="%" disabled /></label>
@@ -140,19 +196,25 @@ function addRow() {
 }
 
 function generateRecommendations() {
-  const best = Math.max(...experiments.map((row) => Number(row.tg || 0)));
+  const best = getBestObjectiveValue();
   const count = Math.max(1, Math.min(20, Number($("#recommendCount").value || 3)));
-  recommendations = Array.from({ length: count }, (_, index) => {
+  const raw = Array.from({ length: count }, (_, index) => {
     const epoxy = 49 + ((index * 2) % 5);
     const curing = 29 + (index % 3);
     const toughener = 7;
     const filler = 11 - (index % 2);
     const diluent = 100 - epoxy - curing - toughener - filler;
-    const predicted = best + 3.8 - index * 1.1 + Math.random() * 0.4;
-    return { id: index + 1, epoxy, curing, toughener, filler, diluent, predicted, uncertainty: 2.1 + index * 0.2, improvement: predicted - best };
+    const uncertainty = 1.4 + optimization.exploration * 2 + index * 0.18;
+    const exploitationStep = optimization.exploitation * (3.6 - index * 0.85);
+    const explorationStep = optimization.exploration * (index % 2 === 0 ? 0.8 : 1.4);
+    const delta = Math.max(0.2, exploitationStep + explorationStep + Math.random() * 0.35);
+    const predicted = optimization.direction === "min" ? best - delta : best + delta;
+    const improvement = optimization.direction === "min" ? best - predicted : predicted - best;
+    return { id: index + 1, epoxy, curing, toughener, filler, diluent, predicted, uncertainty, improvement, score: scoreCandidate(predicted, uncertainty) };
   });
+  recommendations = raw.sort((a, b) => b.score - a.score).map((item, index) => ({ ...item, id: index + 1 }));
   renderRecommendations();
-  showToast(`已生成 ${count} 个推荐配方。`);
+  showToast(`已按${directionText()}与${$("#acquisitionFunction").selectedOptions[0].textContent}生成 ${count} 个推荐配方。`);
 }
 
 function applyRecommendation(id) {
@@ -253,7 +315,20 @@ function bindEvents() {
   $("#closeIssuesButton").addEventListener("click", () => $("#issuesDialog").close());
   $("#trainButton").addEventListener("click", () => showToast("训练完成：已使用有效历史数据更新代理模型。"));
   $("#generateButton").addEventListener("click", generateRecommendations);
-  $("#recommendCount").addEventListener("change", generateRecommendations);
+  $("#recommendCount").addEventListener("change", () => {
+    saveOptimizationSettings(false);
+    generateRecommendations();
+  });
+  $("#saveSettingsButton").addEventListener("click", () => {
+    saveOptimizationSettings(true);
+    generateRecommendations();
+  });
+  $("#explorationInput").addEventListener("input", () => {
+    $("#explorationValue").textContent = Number($("#explorationInput").value).toFixed(2);
+  });
+  $("#exploitationInput").addEventListener("input", () => {
+    $("#exploitationValue").textContent = Number($("#exploitationInput").value).toFixed(2);
+  });
   $("#nextRoundButton").addEventListener("click", updateModel);
   $("#exportButton").addEventListener("click", exportCsv);
   $("#manualInputButton").addEventListener("click", addRow);
@@ -266,10 +341,13 @@ function bindEvents() {
   $("#saveVariablesButton").addEventListener("click", () => {
     $$("#variableRows [data-var]").forEach((input) => {
       const component = components.find((item) => item.key === input.dataset.var);
-      component[input.dataset.kind] = Number(input.value);
+      component[input.dataset.kind] = input.dataset.kind === "name" ? input.value.trim() || component.name : Number(input.value);
     });
     $("#variableDialog").close();
+    renderSettings();
     renderHistory();
+    renderRecommendations();
+    renderFeedback();
     showToast("变量与约束已保存。");
   });
   $("#csvInput").addEventListener("change", (event) => {
@@ -280,7 +358,19 @@ function bindEvents() {
   });
 }
 
+function saveOptimizationSettings(showMessage) {
+  optimization.objectiveName = $("#objectiveName").value.trim() || "Tg";
+  optimization.objectiveUnit = $("#objectiveUnit").value.trim() || "℃";
+  optimization.direction = $("#objectiveDirection").value;
+  optimization.acquisition = $("#acquisitionFunction").value;
+  optimization.exploration = Number($("#explorationInput").value);
+  optimization.exploitation = Number($("#exploitationInput").value);
+  renderSettings();
+  if (showMessage) showToast("优化设置已保存。");
+}
+
 bindEvents();
+renderSettings();
 renderHistory();
 renderRecommendations();
 renderFeedback();
