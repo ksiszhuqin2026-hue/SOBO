@@ -27,6 +27,13 @@ let experiments = [
   { id: 11, round: 1, epoxy: 42, curing: 25, toughener: 10, filler: 13, diluent: 10, tg: 88.0, status: "已实验", source: "manual" }
 ];
 
+let project = {
+  name: "环氧树脂耐热性优化",
+  objective: "玻璃化转变温度 Tg",
+  direction: "max",
+  status: "优化中"
+};
+
 let candidates = [
   { id: 1, epoxy: 44, curing: 25, toughener: 11, filler: 12, diluent: 8, predicted: 156.2, uncertainty: 4.1, improvement: 7.6, reason: "高树脂降低 Tg 提升，不确定性适中。", status: "待实验" },
   { id: 2, epoxy: 45, curing: 24, toughener: 10, filler: 12, diluent: 9, predicted: 153.1, uncertainty: 4.8, improvement: 4.5, reason: "填料协同增效，模型置信较高。", status: "待实验" },
@@ -37,6 +44,7 @@ let candidates = [
 ];
 
 const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function fmt(value, digits = 1) {
   return value === null || Number.isNaN(value) ? "—" : Number(value).toFixed(digits);
@@ -51,7 +59,8 @@ function getCompleted() {
 }
 
 function getBestExperiment() {
-  return getCompleted().sort((a, b) => b.tg - a.tg)[0];
+  const direction = project.direction === "min" ? 1 : -1;
+  return getCompleted().sort((a, b) => direction * (a.tg - b.tg))[0];
 }
 
 function validateExperiments() {
@@ -85,9 +94,14 @@ function validateExperiments() {
 function renderMetrics() {
   const completed = getCompleted();
   const best = getBestExperiment();
-  const bestCandidate = [...candidates].sort((a, b) => b.predicted - a.predicted)[0];
+  const bestCandidate = [...candidates].sort((a, b) => (project.direction === "min" ? a.predicted - b.predicted : b.predicted - a.predicted))[0];
   const issues = validateExperiments();
+  const gain = bestCandidate && best ? (project.direction === "min" ? best.tg - bestCandidate.predicted : bestCandidate.predicted - best.tg) : 0;
 
+  $("h1").textContent = project.name;
+  $(".meta-grid div:first-child dd").textContent = project.objective;
+  $(".meta-grid div:nth-child(2) dd").textContent = project.direction === "min" ? "最小化" : "最大化";
+  $(".meta-grid div:nth-child(3) dd").innerHTML = `<span class="dot"></span>${project.status}`;
   $("#experimentCount").textContent = experiments.length;
   $("#validCount").textContent = completed.length;
   $("#invalidCount").textContent = issues.length;
@@ -95,7 +109,7 @@ function renderMetrics() {
   $("#bestSource").textContent = best ? `来源：实验 ID ${best.id}（第 ${best.round} 轮）` : "来源：--";
   $("#predictedBest").textContent = fmt(bestCandidate?.predicted);
   $("#candidateSource").textContent = bestCandidate ? `候选 #${bestCandidate.id}` : "候选 #--";
-  $("#expectedGain").textContent = fmt(bestCandidate ? bestCandidate.predicted - best.tg : 0);
+  $("#expectedGain").textContent = `${gain >= 0 ? "+" : ""}${fmt(gain)}`;
   $("#suggestionCount").textContent = candidates.length || 12;
   $("#validationIssueCount").textContent = issues.length;
   $("#toolbarIssueCount").textContent = issues.length;
@@ -131,8 +145,8 @@ function renderExperimentRows() {
         <td>${row.round}</td>
         ${components.map((component) => `<td>${fmt(row[component.key])}</td>`).join("")}
         <td>${fmt(row.tg)}</td>
-        <td><span class="status-pill ${row.status === "已实验" ? "done" : "pending"}">${row.status}</span></td>
-        <td>${row.status === "待实验" ? '<button class="link-button" type="button">跳过</button>　<button class="link-button" type="button">回填真实值</button>' : "—"}</td>
+        <td><span class="status-pill ${row.status === "已实验" ? "done" : row.status === "跳过" ? "skipped" : "pending"}">${row.status}</span></td>
+        <td>${row.status === "待实验" ? `<button class="link-button" type="button" data-action="skip-exp" data-id="${row.id}">跳过</button>　<button class="link-button" type="button" data-action="backfill" data-id="${row.id}">回填真实值</button>` : "—"}</td>
       </tr>
     `)
     .join("");
@@ -150,7 +164,7 @@ function renderCandidateRows() {
         <td class="${row.improvement >= 0 ? "positive" : "danger"}">${row.improvement >= 0 ? "+" : ""}${fmt(row.improvement)}</td>
         <td>${row.reason}</td>
         <td><span class="status-pill ${row.status === "待实验" ? "pending" : row.status === "已实验" ? "done" : "skipped"}">${row.status}</span></td>
-        <td><button class="link-button" type="button" data-action="adopt" data-id="${row.id}">转实验</button></td>
+        <td>${row.status === "待实验" ? `<button class="link-button" type="button" data-action="adopt" data-id="${row.id}">转实验</button>　<button class="link-button" type="button" data-action="skip-candidate" data-id="${row.id}">跳过</button>` : "—"}</td>
       </tr>
     `)
     .join("");
@@ -296,6 +310,7 @@ function buildCandidate(id, best) {
   filler = Math.round((100 - epoxy - curing - toughener - diluent) * 10) / 10;
   const predicted = 120 + epoxy * 1.8 + curing * 0.9 + toughener * 0.6 + filler * 1.4 - diluent * 2.6 + Math.random() * 4;
   const uncertainty = randomBetween(3.8, 5.8);
+  const improvement = project.direction === "min" ? best.tg - predicted : predicted - best.tg;
   return {
     id,
     epoxy,
@@ -305,7 +320,7 @@ function buildCandidate(id, best) {
     diluent,
     predicted: Math.round(predicted * 10) / 10,
     uncertainty,
-    improvement: Math.round((predicted - best.tg) * 10) / 10,
+    improvement: Math.round(improvement * 10) / 10,
     reason: predicted > best.tg ? "探索高 Tg 可行区，比例满足全部约束。" : "贴近当前最优，用于降低模型不确定性。",
     status: "待实验"
   };
@@ -325,8 +340,11 @@ function generateCandidates() {
       signatures.add(signature);
     }
   }
-  candidates = generated.sort((a, b) => b.predicted - a.predicted).map((row, index) => ({ ...row, id: index + 1 }));
+  candidates = generated
+    .sort((a, b) => (project.direction === "min" ? a.predicted - b.predicted : b.predicted - a.predicted))
+    .map((row, index) => ({ ...row, id: index + 1 }));
   renderAll();
+  showToast(`已生成 ${candidates.length} 个候选配方。`);
 }
 
 function adoptCandidate(id) {
@@ -345,13 +363,24 @@ function adoptCandidate(id) {
     status: "待实验",
     source: "recommended"
   });
-  candidate.status = "已实验";
+  candidate.status = "已转实验";
   renderAll();
+  showToast(`候选 #${id} 已转入实验数据，等待回填真实 Tg。`);
 }
 
-function exportCsv() {
-  const header = ["candidate_id", ...components.map((component) => component.key), "total", "predicted_tg", "uncertainty", "expected_improvement", "reason", "status"];
-  const rows = candidates.map((row) => [
+function csvDownload(filename, header, rows) {
+  const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCandidatesCsv() {
+  csvDownload("SOBO_recommendations.csv", ["candidate_id", ...components.map((component) => component.key), "total", "predicted_tg", "uncertainty", "expected_improvement", "reason", "status"], candidates.map((row) => [
     row.id,
     ...components.map((component) => row[component.key]),
     rowTotal(row).toFixed(1),
@@ -360,15 +389,28 @@ function exportCsv() {
     row.improvement,
     row.reason,
     row.status
+  ]));
+  showToast("候选配方 CSV 已导出。");
+}
+
+function exportExperimentsCsv() {
+  csvDownload("SOBO_experiments.csv", ["experiment_id", "round", ...components.map((component) => component.key), "tg", "status", "source", "notes"], experiments.map((row) => [
+    row.id,
+    row.round,
+    ...components.map((component) => row[component.key]),
+    row.tg,
+    row.status,
+    row.source,
+    row.notes || ""
+  ]));
+  showToast("实验数据 CSV 已导出。");
+}
+
+function downloadTemplateCsv() {
+  csvDownload("SOBO_import_template.csv", ["epoxy", "curing", "toughener", "filler", "diluent", "tg", "round"], [
+    [45, 25, 10, 12, 8, 148.6, 7]
   ]);
-  const csv = [header, ...rows].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "SOBO_recommendations.csv";
-  link.click();
-  URL.revokeObjectURL(url);
+  showToast("CSV 导入模板已下载。");
 }
 
 function parseCsv(text) {
@@ -398,6 +440,7 @@ function parseCsv(text) {
   });
   experiments = [...imported, ...experiments];
   renderAll();
+  showToast(`已导入 ${imported.length} 条实验数据。`);
 }
 
 function showValidationDialog() {
@@ -408,15 +451,137 @@ function showValidationDialog() {
   $("#validationDialog").showModal();
 }
 
+function showToast(message) {
+  const toast = $("#toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove("show"), 2200);
+}
+
+function openProjectDialog() {
+  $("#projectNameInput").value = project.name;
+  $("#objectiveInput").value = project.objective;
+  $("#directionInput").value = project.direction;
+  $("#statusInput").value = project.status;
+  $("#projectDialog").showModal();
+}
+
+function saveProject() {
+  project = {
+    name: $("#projectNameInput").value.trim() || project.name,
+    objective: $("#objectiveInput").value.trim() || project.objective,
+    direction: $("#directionInput").value,
+    status: $("#statusInput").value
+  };
+  $("#lastUpdated").textContent = new Date().toLocaleString("zh-CN", { hour12: false });
+  $("#projectDialog").close();
+  renderAll();
+  showToast("项目设置已保存。");
+}
+
+function showBestDetail() {
+  const best = getBestExperiment();
+  if (!best) return;
+  $("#bestDetailContent").innerHTML = [
+    ["实验 ID", best.id],
+    ["实验轮次", `第 ${best.round} 轮`],
+    ["Tg", `${fmt(best.tg)} ℃`],
+    ["比例总和", `${fmt(rowTotal(best))}%`],
+    ...components.map((component) => [component.name, `${fmt(best[component.key])}%`])
+  ].map(([label, value]) => `<div class="detail-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  $("#bestDialog").showModal();
+}
+
+function skipExperiment(id) {
+  const row = experiments.find((item) => item.id === id);
+  if (!row) return;
+  row.status = "跳过";
+  renderAll();
+  showToast(`实验 ${id} 已标记为跳过。`);
+}
+
+function openBackfill(id) {
+  $("#backfillId").value = id;
+  $("#backfillTg").value = "";
+  $("#backfillNotes").value = "";
+  $("#backfillDialog").showModal();
+}
+
+function saveBackfill() {
+  const id = Number($("#backfillId").value);
+  const tg = Number($("#backfillTg").value);
+  if (!Number.isFinite(tg)) {
+    showToast("请输入有效的 Tg 数值。");
+    return;
+  }
+  const row = experiments.find((item) => item.id === id);
+  if (!row) return;
+  row.tg = Math.round(tg * 10) / 10;
+  row.notes = $("#backfillNotes").value.trim();
+  row.status = "已实验";
+  $("#backfillDialog").close();
+  renderAll();
+  showToast(`实验 ${id} 已回填 Tg=${fmt(row.tg)} ℃。`);
+}
+
+function skipCandidate(id) {
+  const row = candidates.find((item) => item.id === id);
+  if (!row) return;
+  row.status = "跳过";
+  renderAll();
+  showToast(`候选 #${id} 已跳过。`);
+}
+
+function scrollToSection(targetId) {
+  const section = document.getElementById(targetId);
+  if (!section) return;
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.target === targetId));
+}
+
+function toggleExperimentExpand() {
+  const grid = $(".tables-grid");
+  grid.classList.toggle("expanded");
+  $("#expandExperimentTable").textContent = grid.classList.contains("expanded") ? "×" : "›";
+  showToast(grid.classList.contains("expanded") ? "实验数据表已展开。" : "已恢复双表视图。");
+}
+
 function bindEvents() {
   $("#generateButton").addEventListener("click", generateCandidates);
-  $("#exportButton").addEventListener("click", exportCsv);
+  $("#exportButton").addEventListener("click", exportCandidatesCsv);
+  $("#exportExperimentsButton").addEventListener("click", exportExperimentsCsv);
+  $("#downloadTemplateButton").addEventListener("click", downloadTemplateCsv);
   $("#showValidation").addEventListener("click", showValidationDialog);
   $("#showValidationInline").addEventListener("click", showValidationDialog);
   $("#closeValidation").addEventListener("click", () => $("#validationDialog").close());
+  $("#editProjectButton").addEventListener("click", openProjectDialog);
+  $("#projectSettingsButton").addEventListener("click", openProjectDialog);
+  $("#saveProjectButton").addEventListener("click", saveProject);
+  $("#bestDetailButton").addEventListener("click", showBestDetail);
+  $("#saveBackfillButton").addEventListener("click", saveBackfill);
+  $("#expandExperimentTable").addEventListener("click", toggleExperimentExpand);
+  $("#collapseSidebar").addEventListener("click", () => {
+    $(".app-shell").classList.toggle("sidebar-collapsed");
+    $("#collapseSidebar").textContent = $(".app-shell").classList.contains("sidebar-collapsed") ? "→ 展开" : "← 收起";
+  });
+  $$(".nav-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      if (item.dataset.action === "open-settings") openProjectDialog();
+      else scrollToSection(item.dataset.target);
+    });
+  });
   $("#candidateRows").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action='adopt']");
     if (button) adoptCandidate(Number(button.dataset.id));
+    const skipButton = event.target.closest("[data-action='skip-candidate']");
+    if (skipButton) skipCandidate(Number(skipButton.dataset.id));
+  });
+  $("#experimentRows").addEventListener("click", (event) => {
+    const skipButton = event.target.closest("[data-action='skip-exp']");
+    if (skipButton) skipExperiment(Number(skipButton.dataset.id));
+    const backfillButton = event.target.closest("[data-action='backfill']");
+    if (backfillButton) openBackfill(Number(backfillButton.dataset.id));
   });
   $("#csvInput").addEventListener("change", (event) => {
     const file = event.target.files[0];
