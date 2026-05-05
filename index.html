@@ -3,258 +3,250 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>材料配方优化 - SOBO</title>
+    <title>MatOpt 配方优化</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar">
+    <div class="matopt-shell">
+      <header class="app-header">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span>材料配方优化</span>
+          <strong>MatOpt</strong>
+          <span>配方优化</span>
         </div>
-        <nav class="nav-list" aria-label="主导航">
-          <button class="nav-item active" type="button" data-target="projectOverview"><span class="icon">▥</span>项目</button>
-          <button class="nav-item" type="button" data-target="experimentSection"><span class="icon">△</span>实验数据</button>
-          <button class="nav-item" type="button" data-target="recommendationSection"><span class="icon">◎</span>推荐候选</button>
-          <button class="nav-item" type="button" data-target="constraintSection"><span class="icon">⚖</span>变量约束</button>
-          <button class="nav-item" type="button" data-target="ioSection"><span class="icon">⇧</span>导入导出</button>
-          <button class="nav-item" type="button" data-action="open-settings"><span class="icon">⚙</span>设置</button>
+        <button class="icon-button" id="menuButton" type="button" aria-label="折叠菜单">☰</button>
+        <nav class="tabs" aria-label="主视图">
+          <button class="tab" type="button" data-panel="space">配方空间</button>
+          <button class="tab active" type="button" data-panel="recommend">优化推荐</button>
+          <button class="tab" type="button" data-panel="analysis">结果分析</button>
         </nav>
-        <button class="collapse" type="button" id="collapseSidebar">← 收起</button>
-      </aside>
+        <div class="iteration">Iteration <strong id="iterationNow">18</strong> / <span id="iterationTotal">40</span></div>
+        <div class="header-actions">
+          <button class="primary-button" id="runButton" type="button">▷ 运行迭代</button>
+          <button class="secondary-button" id="addResultButton" type="button">⊕ 添加实验结果</button>
+          <button class="secondary-button" id="exportButton" type="button">⇩ 导出</button>
+          <button class="icon-button" id="helpButton" type="button" aria-label="帮助">?</button>
+          <button class="icon-button" id="settingsButton" type="button" aria-label="设置">⚙</button>
+        </div>
+      </header>
 
-      <main class="workspace">
-        <header class="topbar" id="projectOverview">
-          <div class="project-title">
-            <h1>环氧树脂耐热性优化</h1>
-            <button class="icon-button" type="button" title="编辑项目" id="editProjectButton">✎</button>
-          </div>
-          <dl class="meta-grid">
-            <div>
-              <dt>目标（单目标）</dt>
-              <dd>玻璃化转变温度 Tg</dd>
+      <div class="layout-grid">
+        <aside class="left-rail" id="leftRail">
+          <section class="side-card">
+            <div class="card-title">
+              <h2>目标设置</h2>
+              <button class="mini-info" type="button" data-help="目标设置决定优化推荐排序和最优解判定。">i</button>
             </div>
-            <div>
-              <dt>优化方向</dt>
-              <dd class="positive">最大化</dd>
-            </div>
-            <div>
-              <dt>项目状态</dt>
-              <dd><span class="dot"></span>优化中</dd>
-            </div>
-            <div>
-              <dt>创建时间</dt>
-              <dd>2025-05-12 10:30</dd>
-            </div>
-            <div>
-              <dt>最后更新</dt>
-              <dd id="lastUpdated">2025-05-16 14:22</dd>
-            </div>
-          </dl>
-          <button class="settings-button" type="button" id="projectSettingsButton">⚙ 项目设置⌄</button>
-        </header>
+            <label class="field-label">主目标</label>
+            <div class="objective">最大化 Tg</div>
+            <label class="field-label" for="objectiveMetric">指标</label>
+            <select id="objectiveMetric">
+              <option>玻璃化转变温度 (℃)</option>
+              <option>冲击强度 (kJ/m²)</option>
+              <option>热变形温度 (℃)</option>
+            </select>
+          </section>
 
-        <section class="summary-grid" aria-label="项目概览">
-          <article class="metric-card">
-            <span class="metric-label">已实验配方</span>
-            <strong id="experimentCount">0</strong>
-            <small>有效 <b id="validCount">0</b>　异常 <b class="danger" id="invalidCount">0</b></small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">当前最优 Tg</span>
-            <strong><span id="bestValue">--</span> <em>℃</em></strong>
-            <small id="bestSource">来源：--</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">预测最优 Tg</span>
-            <strong><span id="predictedBest">--</span> <em>℃</em></strong>
-            <small id="candidateSource">候选 #--</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">预计改进</span>
-            <strong class="positive"><span id="expectedGain">+0.0</span> <em>℃</em></strong>
-            <small>相对当前最优</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">下一实验轮次</span>
-            <strong>第 <span id="nextRound">8</span> <em>轮</em></strong>
-            <small>建议 <span id="suggestionCount">12</span> 个候选</small>
-          </article>
-          <article class="metric-card validation-card">
-            <span class="metric-label">数据校验状态</span>
-            <strong class="danger">△ 数据校验：<span id="validationIssueCount">0</span> 条需修正</strong>
-            <button class="link-button" type="button" id="showValidation">查看详情 ›</button>
-          </article>
-        </section>
+          <section class="side-card">
+            <div class="card-title">
+              <h2>组分定义 <small>（单位：%）</small></h2>
+            </div>
+            <div class="component-table" id="componentBounds"></div>
+            <button class="ghost-button full" id="addComponentButton" type="button">＋ 添加组分</button>
+          </section>
 
-        <section class="analytics-grid">
-          <article class="panel chart-panel">
-            <div class="panel-heading">
-              <h2>历史最优 Tg 趋势</h2>
-              <span>单位：℃</span>
-            </div>
-            <canvas id="trendChart" width="720" height="320" aria-label="历史最优 Tg 趋势图"></canvas>
-          </article>
-          <article class="panel chart-panel">
-            <div class="panel-heading">
-              <h2>目标值（Tg）分布</h2>
-              <span>已实验 / 候选预测</span>
-            </div>
-            <canvas id="distributionChart" width="560" height="320" aria-label="目标值分布图"></canvas>
-          </article>
-          <article class="panel best-panel" id="constraintSection">
-            <div class="panel-heading">
-              <h2>当前最优配方（实验值）</h2>
-              <span class="status-pill done">已实验</span>
-            </div>
-            <div class="best-value"><span id="bestCardValue">--</span> ℃ <small id="bestCardMeta">实验 ID：--</small></div>
-            <div class="stacked-bar" id="bestBar"></div>
-            <ul class="component-list" id="bestComponents"></ul>
-            <p>实验备注：高温后 Tg 表现优异。</p>
-            <button class="secondary-button" type="button" id="bestDetailButton">查看详情</button>
-          </article>
-        </section>
+          <section class="side-card compact">
+            <h2>边界（Bounds）</h2>
+            <table class="mini-table">
+              <thead>
+                <tr><th>组分</th><th>下限 (%)</th><th>上限 (%)</th></tr>
+              </thead>
+              <tbody id="boundsRows"></tbody>
+            </table>
+          </section>
 
-        <section class="tables-grid">
-          <article class="panel data-panel" id="experimentSection">
-            <div class="table-toolbar">
+          <section class="side-card compact">
+            <h2>约束条件</h2>
+            <ul class="constraint-list" id="constraintList"></ul>
+          </section>
+
+          <section class="side-card compact">
+            <h2>采集函数（Acquisition）</h2>
+            <select id="acquisitionSelect">
+              <option>Expected Improvement</option>
+              <option>Upper Confidence Bound</option>
+              <option>Probability of Improvement</option>
+            </select>
+            <div class="xi-row">
+              <span>探索强度 ξ (xi)</span>
+              <input id="xiInput" value="0.01" inputmode="decimal" />
+            </div>
+          </section>
+        </aside>
+
+        <main class="main-stage">
+          <section class="metric-row">
+            <article class="metric-card">
+              <span class="metric-icon star">★</span>
               <div>
-                <button class="secondary-button" type="button" id="importButton">⇧ 导入历史实验</button>
-                <label class="secondary-button file-label">
-                  选择 CSV
-                  <input id="csvInput" type="file" accept=".csv,text/csv" />
-                </label>
-                <button class="danger-button" type="button" id="showValidationInline">△ 数据校验：<span id="toolbarIssueCount">0</span> 条需修正</button>
+                <small>当前最佳 Tg</small>
+                <strong><span id="bestTg">168.5</span> °C</strong>
+                <em>at Iteration <span id="bestIteration">15</span></em>
               </div>
-              <button class="icon-button" type="button" title="展开" id="expandExperimentTable">›</button>
-            </div>
-            <div class="panel-heading">
-              <h2>实验数据 <small>（共 <span id="experimentTotal">0</span> 条）</small></h2>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon wave">⌁</span>
+              <div>
+                <small>Expected Improvement (EI)</small>
+                <strong><span id="topEi">4.8</span> °C</strong>
+              </div>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon bell">⌬</span>
+              <div>
+                <small>Prediction Uncertainty (σ)</small>
+                <strong><span id="topSigma">2.1</span> °C</strong>
+              </div>
+            </article>
+            <article class="metric-card">
+              <span class="metric-icon clock">◷</span>
+              <div>
+                <small>Remaining Budget</small>
+                <strong><span id="remainingBudget">22</span> / 40</strong>
+              </div>
+            </article>
+          </section>
+
+          <section class="analysis-grid">
+            <article class="panel surrogate-panel">
+              <div class="panel-head">
+                <h2>代理模型：预测 Tg vs 填料比例</h2>
+                <select id="sliceSelect"><option>固化剂比例 = 28%</option><option>环氧树脂比例 = 52%</option></select>
+              </div>
+              <canvas id="surrogateChart" width="680" height="310"></canvas>
+            </article>
+            <article class="panel heatmap-panel">
+              <div class="panel-head">
+                <h2>采集函数热图：Expected Improvement (EI)</h2>
+                <select id="heatmapMode"><option>等高热图</option><option>散点视图</option></select>
+              </div>
+              <canvas id="heatmapChart" width="640" height="310"></canvas>
+            </article>
+            <article class="panel convergence-panel">
+              <div class="panel-head">
+                <h2>收敛曲线：历史最佳 Tg</h2>
+              </div>
+              <canvas id="convergenceChart" width="680" height="270"></canvas>
+            </article>
+            <article class="panel uncertainty-panel">
+              <div class="panel-head">
+                <h2>不确定性：当前最佳区域</h2>
+                <select id="uncertaintySlice"><option>固化剂比例 = 28%</option><option>填料比例 = 10%</option></select>
+              </div>
+              <canvas id="uncertaintyChart" width="640" height="270"></canvas>
+            </article>
+          </section>
+
+          <section class="editor-row">
+            <article class="panel formula-editor">
+              <div class="panel-head">
+                <h2>当前候选配方编辑</h2>
+              </div>
+              <div class="composition-bar" id="compositionBar"></div>
+              <div class="editor-grid" id="editorGrid"></div>
+            </article>
+            <article class="panel total-card">
+              <span>总和</span>
+              <strong id="compositionTotal">100.0%</strong>
+              <small id="totalStatus">满足约束</small>
+              <button class="secondary-button full" id="normalizeButton" type="button">⚖ 归一化</button>
+              <button class="secondary-button full accent" id="lockFormulaButton" type="button">▣ 锁定配方</button>
+              <button class="primary-button full" id="saveExperimentButton" type="button">保存为实验记录</button>
+            </article>
+          </section>
+
+          <section class="panel history-panel">
+            <div class="panel-head">
+              <h2>历史实验</h2>
+              <span>共 <b id="historyCount">17</b> 条记录</span>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>实验 ID</th>
-                    <th>轮次</th>
+                    <th>Iter.</th>
+                    <th>样品ID</th>
                     <th>环氧树脂 %</th>
                     <th>固化剂 %</th>
                     <th>增韧剂 %</th>
                     <th>填料 %</th>
                     <th>稀释剂 %</th>
-                    <th>Tg (℃)</th>
+                    <th>催化剂 %</th>
+                    <th>Tg (°C)</th>
+                    <th>约束</th>
                     <th>状态</th>
-                    <th>操作</th>
+                    <th>备注</th>
                   </tr>
                 </thead>
-                <tbody id="experimentRows"></tbody>
+                <tbody id="historyRows"></tbody>
               </table>
             </div>
-          </article>
-
-          <article class="panel recommendation-panel" id="recommendationSection">
-            <div class="table-toolbar">
-              <button class="primary-button" type="button" id="generateButton">✦ 生成 12 个候选</button>
-              <button class="secondary-button" type="button" id="exportButton">⇩ 导出 CSV</button>
+            <div class="pager">
+              <span>共 <b id="recordCount">17</b> 条记录</span>
+              <div>
+                <button class="icon-button" type="button">‹</button>
+                <button class="page-button active" type="button">1</button>
+                <button class="page-button" type="button">2</button>
+                <button class="page-button" type="button">3</button>
+                <button class="icon-button" type="button">›</button>
+              </div>
+              <select><option>10 条/页</option><option>20 条/页</option></select>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>候选 ID</th>
-                    <th>环氧树脂 %</th>
-                    <th>固化剂 %</th>
-                    <th>增韧剂 %</th>
-                    <th>填料 %</th>
-                    <th>稀释剂 %</th>
-                    <th>比例总和</th>
-                    <th>预测 Tg (℃)</th>
-                    <th>不确定性 (℃)</th>
-                    <th>预期改进 (℃)</th>
-                    <th>推荐理由</th>
-                    <th>状态</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="candidateRows"></tbody>
-              </table>
-            </div>
-          </article>
-        </section>
+          </section>
+        </main>
 
-        <section class="panel utility-panel" id="ioSection">
-          <div>
-            <h2>导入导出</h2>
-            <p>支持导入历史实验 CSV，并导出当前推荐候选。导入模板列：epoxy, curing, toughener, filler, diluent, tg, round。</p>
-          </div>
-          <div>
-            <button class="secondary-button" type="button" id="downloadTemplateButton">下载 CSV 模板</button>
-            <button class="secondary-button" type="button" id="exportExperimentsButton">导出实验数据</button>
-          </div>
-        </section>
-      </main>
+        <aside class="right-rail">
+          <section class="recommend-card">
+            <div class="card-title">
+              <h2>下一组推荐配方</h2>
+              <button class="mini-info" type="button" data-help="默认按 Expected Improvement (EI) 从高到低排序。">i</button>
+            </div>
+            <p class="sort-note">按 Expected Improvement (EI) 排序</p>
+            <div id="candidateCards" class="candidate-list"></div>
+            <button class="link-row" id="showAllCandidates" type="button">查看全部候选配方（共 12 组） →</button>
+          </section>
+        </aside>
+      </div>
     </div>
 
-    <dialog id="validationDialog">
-      <div class="dialog-card">
-        <div class="dialog-heading">
-          <h2>数据校验详情</h2>
-          <button class="icon-button" type="button" id="closeValidation">×</button>
-        </div>
-        <ul id="validationList" class="validation-list"></ul>
-      </div>
-    </dialog>
-
-    <dialog id="projectDialog">
+    <dialog id="resultDialog">
       <form class="dialog-card" method="dialog">
-        <div class="dialog-heading">
-          <h2>编辑项目</h2>
+        <div class="dialog-head">
+          <h2>添加实验结果</h2>
           <button class="icon-button" type="submit">×</button>
         </div>
         <div class="form-grid">
-          <label>项目名称<input id="projectNameInput" value="环氧树脂耐热性优化" /></label>
-          <label>目标指标<input id="objectiveInput" value="玻璃化转变温度 Tg" /></label>
-          <label>优化方向<select id="directionInput"><option value="max">最大化</option><option value="min">最小化</option></select></label>
-          <label>项目状态<select id="statusInput"><option>优化中</option><option>暂停</option><option>已完成</option></select></label>
+          <label>样品 ID<input id="sampleInput" value="S-018" /></label>
+          <label>Tg (°C)<input id="tgInput" type="number" step="0.1" value="169.3" /></label>
+          <label>备注<input id="noteInput" value="新推荐样品" /></label>
         </div>
         <menu class="dialog-actions">
           <button class="secondary-button" type="submit">取消</button>
-          <button class="primary-button" type="button" id="saveProjectButton">保存</button>
+          <button class="primary-button" id="confirmResultButton" type="button">保存结果</button>
         </menu>
       </form>
     </dialog>
 
-    <dialog id="bestDialog">
+    <dialog id="helpDialog">
       <form class="dialog-card" method="dialog">
-        <div class="dialog-heading">
-          <h2>当前最优配方详情</h2>
+        <div class="dialog-head">
+          <h2>操作说明</h2>
           <button class="icon-button" type="submit">×</button>
         </div>
-        <div id="bestDetailContent" class="detail-grid"></div>
-      </form>
-    </dialog>
-
-    <dialog id="backfillDialog">
-      <form class="dialog-card" method="dialog">
-        <div class="dialog-heading">
-          <h2>回填实验结果</h2>
-          <button class="icon-button" type="submit">×</button>
-        </div>
-        <input type="hidden" id="backfillId" />
-        <div class="form-grid">
-          <label>真实 Tg (℃)<input id="backfillTg" type="number" step="0.1" min="0" placeholder="例如 151.2" /></label>
-          <label>实验备注<input id="backfillNotes" placeholder="可填写实验观察" /></label>
-        </div>
-        <menu class="dialog-actions">
-          <button class="secondary-button" type="submit">取消</button>
-          <button class="primary-button" type="button" id="saveBackfillButton">保存结果</button>
-        </menu>
+        <p class="dialog-copy">点击右侧推荐卡片可应用到编辑器；调整滑块后可归一化并保存为实验记录；运行迭代会刷新候选排序、预算和图表。</p>
       </form>
     </dialog>
 
     <div id="toast" role="status" aria-live="polite"></div>
-
     <script src="app.js"></script>
   </body>
 </html>
